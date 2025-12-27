@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Journal</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+--bg:#0b0f1a; --card:#131a2a; --border:#1f2a44;
+--primary:#fff; /* قائمة جانبية بيضاء */
+--green:#22c55e; --red:#ef4444; --blue:#38bdf8;
+--text:#e5e7eb; --muted:#94a3b8; --yellow:#facc15; --purple:#a855f7; --cyan:#06b6d4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui;padding:16px}
+
+/* MENU HAMBURGER */
+.menu-btn {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  width: 24px;
+  height: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  z-index: 3000;
+}
+.menu-btn span {
+  display: block;
+  height: 3px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+/* SIDEBAR */
+.sidebar{position:fixed;top:0;left:-240px;width:240px;height:100%;background:var(--card);border-right:1px solid var(--border);padding:20px;transition:.3s;z-index:2000}
+.sidebar.active{left:0} 
+.sidebar a{display:block;color:var(--text);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px} 
+.sidebar a:hover{color:var(--primary)}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:16px} 
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px} 
+input,select,button{width:100%;padding:10px;margin-top:6px;background:#0f1524;border:1px solid var(--border);color:#fff;border-radius:8px} 
+button{background:var(--primary);border:none;font-weight:bold;cursor:pointer} 
+table{width:100%;border-collapse:collapse;font-size:11px} 
+th,td{padding:8px;border-bottom:1px solid var(--border);text-align:center}
+
+/* CALENDAR */
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px} 
+.day{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;background:#0f1524} 
+.day small{font-size:10px;opacity:.8} 
+
+/* Calendar triangles */
+.cal-btn {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 4px 6px 4px;
+  border-color: transparent;
+  cursor: pointer;
+  background: none;
+}
+.cal-btn.left { border-right-color: var(--text); }
+.cal-btn.right { border-left-color: var(--text); }
+
+</style>
+</head>
+<body>
+
+<!-- MENU HAMBURGER -->
+<div class="menu-btn" id="menuBtn">
+  <span></span>
+  <span></span>
+  <span></span>
+</div>
+
+<div class="sidebar" id="sidebar">
+  <a href="#" data-tab="dash">Dashboard</a>
+  <a href="#" data-tab="addTrade">Add Trade</a>
+  <a href="#" data-tab="tradeLog">Trade Log</a>
+  <a href="#" data-tab="calendar">Calendar</a>
+  <a href="#" data-tab="settings">Settings</a>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dash" class="section">
+<div class="stats">
+<div class="card" style="background:#7c3aed"><small>Net PnL</small><b id="net">$0</b></div>
+<div class="card" style="background:#16a34a"><small>Profit</small><b id="profit">$0</b></div>
+<div class="card" style="background:#ef4444"><small>Loss</small><b id="loss">$0</b></div>
+<div class="card" style="background:#38bdf8"><small>Capital (Static)</small><b id="capital">$10000</b></div>
+<div class="card" style="background:#06b6d4"><small>Capital (Dynamic)</small><b id="dynamicCapital">$10000</b></div>
+<div class="card" style="background:#facc15"><small>Payout</small><b id="payout">$0</b></div>
+<div class="card" style="background:#a855f7"><small>Total Trades</small><b id="count">0</b></div>
+</div>
+<div class="card"><canvas id="chart"></canvas></div>
+</div>
+
+<!-- ADD TRADE -->
+<div id="addTrade" class="section" style="display:none">
+<div class="card">
+<select id="market"><option>Forex</option><option>Crypto</option><option>Futures</option></select>
+<input id="symbol" placeholder="Symbol">
+<input id="tradeLink" placeholder="Trade Link (URL)">
+<select id="session"><option>Asia</option><option>London</option><option>New York</option></select>
+<select id="type"><option value="buy">Buy</option><option value="sell">Sell</option></select>
+<input id="entry" placeholder="Entry">
+<input id="exit" placeholder="Exit">
+<input id="size" placeholder="Size">
+<input type="date" id="tradeDate">
+<input id="strategy" placeholder="Strategy">
+<input id="psychology" placeholder="Psychology">
+<button onclick="addTrade()">Save Trade</button>
+</div>
+</div>
+
+<!-- TRADE LOG -->
+<div id="tradeLog" class="section" style="display:none">
+<div class="card" style="max-height:70vh;overflow:auto">
+<table>
+<thead>
+<tr><th>Market</th><th>Symbol</th><th>Link</th><th>Session</th><th>Type</th><th>Entry</th><th>Exit</th><th>Size</th><th>PnL</th><th>Date</th><th>Edit</th><th>Delete</th></tr>
+</thead>
+<tbody id="list"></tbody>
+</table>
+</div>
+</div>
+
+<!-- CALENDAR -->
+<div id="calendar" class="section" style="display:none">
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+<button class="cal-btn left" onclick="prevMonth()"></button>
+<b id="monthLabel"></b>
+<button class="cal-btn right" onclick="nextMonth()"></button>
+</div>
+<div class="calendar" style="font-weight:bold;text-align:center">
+<div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+</div>
+<div class="calendar" id="cal"></div>
+</div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings" class="section" style="display:none">
+  <div class="card">
+    <label>Base Capital</label>
+    <input id="setBaseCapital" type="number" value="10000">
+    <label>Payout</label>
+    <input id="setPayout" type="number" value="0">
+    <button onclick="saveSettings()">Save Settings</button>
+  </div>
+</div>
+
+<script>
+const sidebar=document.getElementById("sidebar");
+const menuBtn=document.getElementById("menuBtn");
+menuBtn.onclick=()=>sidebar.classList.toggle("active");
+
+document.querySelectorAll(".sidebar a").forEach(a=>{
+  a.onclick=e=>{
+    e.preventDefault();
+    document.querySelectorAll(".section").forEach(s=>s.style.display="none");
+    document.getElementById(a.dataset.tab).style.display="block";
+    sidebar.classList.remove("active");
+  }
+});
+
+let trades=JSON.parse(localStorage.trades||"[]");
+const list=document.getElementById("list");
+const net=document.getElementById("net");
+const count=document.getElementById("count");
+const profitEl=document.getElementById("profit");
+const lossEl=document.getElementById("loss");
+const capitalEl=document.getElementById("capital");
+const dynamicCapitalEl=document.getElementById("dynamicCapital");
+const payoutEl=document.getElementById("payout");
+const cal=document.getElementById("cal");
+let currentMonth = new Date().getMonth();
+let currentYear  = new Date().getFullYear();
+let baseCapital=localStorage.baseCapital?+localStorage.baseCapital:10000;
+let payout=localStorage.payout?+localStorage.payout:0;
+
+const chart=new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{labels:[], datasets:[{label:"Capital", data:[], borderColor:"#22c55e", borderWidth:2, fill:false, pointRadius:3, tension:0.2}]},
+    options:{
+        plugins:{legend:{display:false}},
+        scales:{y:{beginAtZero:false, ticks:{callback: v => '$'+v}}}
+    }
+});
+
+function renderCalendar(){
+    cal.innerHTML="";
+    const monthNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    document.getElementById("monthLabel").textContent=`${monthNames[currentMonth]} ${currentYear}`;
+    const firstDay=new Date(currentYear,currentMonth,1).getDay();
+    const daysInMonth=new Date(currentYear,currentMonth+1,0).getDate();
+    for(let i=0;i<firstDay;i++) cal.appendChild(document.createElement("div"));
+    for(let d=1;d<=daysInMonth;d++){
+        const dateStr=`${currentYear}-${String(currentMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        const dayTrades=trades.filter(t=>t.date===dateStr);
+        const pnl=dayTrades.reduce((a,b)=>a+b.pnl,0);
+        const box=document.createElement("div");
+        box.className="day";
+        box.innerHTML=`<b>${d}</b><small>${dayTrades.length}</small>`;
+        box.style.background = pnl>0?"rgba(34,197,94,0.2)":pnl<0?"rgba(239,68,68,0.2)":dayTrades.length?"#2563eb":"#0f1524";
+        cal.appendChild(box);
+    }
+}
+
+function prevMonth(){currentMonth--; if(currentMonth<0){currentMonth=11; currentYear--;} renderCalendar();}
+function nextMonth(){currentMonth++; if(currentMonth>11){currentMonth=0; currentYear++;} renderCalendar();}
+
+function render(){
+    let profit=0, loss=0, dynamicCapital=baseCapital;
+    let capitalHistory=[];
+    list.innerHTML="";
+    trades.forEach((t,i)=>{
+        t.pnl>0 ? profit+=t.pnl : loss+=Math.abs(t.pnl);
+        dynamicCapital += t.pnl;
+        capitalHistory.push(dynamicCapital);
+        list.innerHTML+=`<tr class="${t.pnl>=0?'profit':'loss'}">
+        <td>${t.market}</td><td>${t.symbol}</td><td><a href="${t.tradeLink||'#'}" target="_blank">Link</a></td><td>${t.session}</td><td>${t.type}</td>
+        <td>${t.entry}</td><td>${t.exit}</td><td>${t.size}</td>
+        <td>${t.pnl.toFixed(2)}</td><td>${t.date}</td>
+        <td><button onclick="editTrade(${i})">✏️</button></td>
+        <td><button onclick="deleteTrade(${i})">🗑️</button></td></tr>`;
+    });
+    net.textContent=`$${(profit-loss).toFixed(2)}`;
+    count.textContent=trades.length;
+    profitEl.textContent=`$${profit.toFixed(2)}`;
+    lossEl.textContent=`$${loss.toFixed(2)}`;
+    capitalEl.textContent=`$${baseCapital.toFixed(2)}`;
+    dynamicCapitalEl.textContent=`$${dynamicCapital.toFixed(2)}`;
+    payoutEl.textContent=`$${payout.toFixed(2)}`;
+
+    chart.data.labels = trades.map((_,i)=>i+1);
+    chart.data.datasets[0].data = capitalHistory;
+    chart.data.datasets[0].borderColor = capitalHistory.map(c => c >= baseCapital ? '#22c55e' : '#ef4444');
+    chart.update();
+
+    renderCalendar();
+}
+
+function addTrade(){
+    const pnl=type.value==='buy'?(exit.value-entry.value)*size.value:(entry.value-exit.value)*size.value;
+    trades.push({
+        market:market.value,
+        symbol:symbol.value,
+        tradeLink:tradeLink.value,
+        session:session.value,
+        type:type.value,
+        entry:+entry.value,
+        exit:+exit.value,
+        size:+size.value,
+        pnl,
+        date:tradeDate.value||new Date().toISOString().split("T")[0],
+        strategy:strategy.value,
+        psychology:psychology.value
+    });
+    localStorage.trades=JSON.stringify(trades);
+    render();
+}
+
+function editTrade(i){
+    const t=trades[i]; 
+    market.value=t.market; symbol.value=t.symbol; tradeLink.value=t.tradeLink;
+    session.value=t.session; type.value=t.type;
+    entry.value=t.entry; exit.value=t.exit; size.value=t.size; tradeDate.value=t.date;
+    strategy.value=t.strategy; psychology.value=t.psychology;
+}
+
+function deleteTrade(i){
+    trades.splice(i,1);
+    localStorage.trades=JSON.stringify(trades);
+    render();
+}
+
+function saveSettings(){
+  baseCapital = +document.getElementById('setBaseCapital').value;
+  payout = +document.getElementById('setPayout').value;
+  localStorage.baseCapital = baseCapital;
+  localStorage.payout = payout;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
